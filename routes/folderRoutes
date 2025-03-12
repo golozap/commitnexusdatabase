@@ -1,0 +1,63 @@
+const express = require("express");
+const multer = require("multer");
+const Folder = require("../models/Folder");
+const fs = require("fs");
+const path = require("path");
+
+const router = express.Router();
+
+// 📂 Multer Storage Config (For File Uploads)
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadPath = path.join(__dirname, "../uploads");
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath, { recursive: true });
+    }
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    cb(null, file.originalname);
+  },
+});
+
+const upload = multer({ storage });
+
+// 📌 1️⃣ Upload Folder/File Structure (POST)
+router.post("/upload", upload.array("files"), async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: "No files uploaded" });
+    }
+
+    let savedFolders = [];
+    for (let file of req.files) {
+      const folderPath = file.destination.replace(/\\/g, "/");
+      const newFolder = new Folder({
+        name: file.originalname,
+        type: "file",
+        path: folderPath + "/" + file.originalname,
+        size: file.size,
+      });
+
+      const savedFolder = await newFolder.save();
+      savedFolders.push(savedFolder);
+    }
+
+    res.status(201).json({ message: "Upload successful", savedFolders });
+  } catch (error) {
+    console.error("❌ Upload error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 📌 2️⃣ Get All Root Folders (GET)
+router.get("/folders", async (req, res) => {
+  try {
+    const folders = await Folder.find({ parent: null }).populate("children");
+    res.json(folders);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+module.exports = router;

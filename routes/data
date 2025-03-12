@@ -1,0 +1,90 @@
+const express = require("express");
+const Folder = require("../models/Folder");
+
+const router = express.Router();
+
+// 📂 Helper Function: Save Folder Structure Recursively
+const saveFolderStructure = async (folderData, parentId = null) => {
+  const folder = new Folder({
+    name: folderData.name,
+    type: folderData.type,
+    path: folderData.path,
+    parent: parentId,
+    size: folderData.size || 0,
+  });
+
+  const savedFolder = await folder.save();
+
+  if (folderData.children && folderData.children.length > 0) {
+    for (const child of folderData.children) {
+      const childEntry = await saveFolderStructure(child, savedFolder._id);
+      savedFolder.children.push(childEntry._id);
+    }
+    await savedFolder.save();
+  }
+
+  return savedFolder;
+};
+
+// 📌 1️⃣ Upload a Folder Structure (POST)
+router.post("/upload", async (req, res) => {
+  try {
+    const { rootFolder } = req.body;
+    if (!rootFolder) {
+      return res.status(400).json({ error: "No folder data provided" });
+    }
+
+    const savedStructure = await saveFolderStructure(rootFolder);
+    res.status(201).json(savedStructure);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 📌 2️⃣ Get All Root Folders (GET)
+router.get("/folders", async (req, res) => {
+  try {
+    const folders = await Folder.find({ parent: null }).populate("children");
+    res.json(folders);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 📌 3️⃣ Get a Folder's Contents (GET)
+router.get("/folders/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const folder = await Folder.findById(id).populate("children");
+    if (!folder) return res.status(404).json({ error: "Folder not found" });
+
+    res.json(folder);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 📌 4️⃣ Delete a Folder or File (DELETE)
+router.delete("/folders/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const folder = await Folder.findById(id);
+    if (!folder) return res.status(404).json({ error: "Folder not found" });
+
+    // Delete all nested folders & files
+    const deleteRecursive = async (folderId) => {
+      const children = await Folder.find({ parent: folderId });
+      for (const child of children) {
+        await deleteRecursive(child._id);
+      }
+      await Folder.findByIdAndDelete(folderId);
+    };
+
+    await deleteRecursive(id);
+    res.json({ message: "Folder deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+module.exports = router;
