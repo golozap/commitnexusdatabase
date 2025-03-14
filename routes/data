@@ -1,90 +1,147 @@
-const express = require("express");
-const Folder = require("../models/Folder");
+import React, { useState } from "react";
+import "./DataSharing.css";
+import Head from "../homepage/header";
 
-const router = express.Router();
+const DataSharing = () => {
+  const [folderStructure, setFolderStructure] = useState({});
+  const [expandedFolders, setExpandedFolders] = useState({});
 
-// 📂 Helper Function: Save Folder Structure Recursively
-const saveFolderStructure = async (folderData, parentId = null) => {
-  const folder = new Folder({
-    name: folderData.name,
-    type: folderData.type,
-    path: folderData.path,
-    parent: parentId,
-    size: folderData.size || 0,
-  });
+  // File type logos
+  const fileIcons = {
+    html: "<>",
+    css: "🎨",
+    js: "⚡",
+    jsx: "⚛️",
+    ts: "TS",
+    tsx: "TSX",
+    py: "🐍",
+    java: "☕",
+    cpp: "C++",
+    c: "C",
+    cs: "C#",
+    php: "🐘",
+    swift: "🦊",
+    go: "🐹",
+    kotlin: "📱",
+    ruby: "💎",
+    json: "🗂️",
+    django: "🐍",
+    rs: "🦀",
+    pl: "🚀",
+    sh: "🛠️",
+    node: "🟢",
+    md: "📄",
+    lisp: "🦜",
+    dart: "🐦",
+    sol: "🔗",
+    r: "🎛️",
+    default: "📁", // Default folder icon
+  };
 
-  const savedFolder = await folder.save();
+  // Get icon based on file extension
+  const getFileIcon = (filename) => {
+    const ext = filename.split(".").pop().toLowerCase();
+    return fileIcons[ext] || "📄"; // Default document icon
+  };
 
-  if (folderData.children && folderData.children.length > 0) {
-    for (const child of folderData.children) {
-      const childEntry = await saveFolderStructure(child, savedFolder._id);
-      savedFolder.children.push(childEntry._id);
-    }
-    await savedFolder.save();
-  }
+  // Build folder tree
+  const buildFolderTree = (files) => {
+    const tree = {};
+    files.forEach((file) => {
+      const pathParts = file.webkitRelativePath.split("/");
+      let currentLevel = tree;
 
-  return savedFolder;
+      pathParts.forEach((part, index) => {
+        if (!currentLevel[part]) {
+          currentLevel[part] = index === pathParts.length - 1 ? file.name : {};
+        }
+        currentLevel = currentLevel[part];
+      });
+    });
+    return tree;
+  };
+
+  // Handle file selection
+  const handleFileChange = (event) => {
+    const files = Array.from(event.target.files);
+    setFolderStructure(buildFolderTree(files));
+  };
+
+  // Toggle folder view
+  const toggleFolder = (folderPath) => {
+    setExpandedFolders((prev) => ({
+      ...prev,
+      [folderPath]: !prev[folderPath],
+    }));
+  };
+
+  // Render folder & file structure with folders first
+const renderFolderTree = (tree, parentPath = "") => {
+  const entries = Object.entries(tree);
+  
+  // Separate folders and files
+  const folders = entries.filter(([_, value]) => typeof value === "object");
+  const files = entries.filter(([_, value]) => typeof value !== "object");
+
+  return (
+    <ul>
+      {[...folders, ...files].map(([key, value], index) => {
+        const fullPath = parentPath ? `${parentPath}/${key}` : key;
+        const isFolder = typeof value === "object";
+
+        return (
+          <li key={index}  style={{ }}>
+            {isFolder ? (
+              <div onClick={() => toggleFolder(fullPath)} style={{ cursor: "pointer", fontWeight: "bold", textAlign: "left", padding: "5px"}}>
+                📁 {key}
+              </div>
+            ) : null}
+
+            {isFolder && expandedFolders[fullPath] && (
+              <div style={{ paddingLeft: "1.5rem", textAlign: "left" }}>
+                {renderFolderTree(value, fullPath)}
+              </div>
+            )}
+
+            {!isFolder && (
+              <div style={{ padding: "0.2rem" }}>
+                {getFileIcon(value)} {value}
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
 };
 
-// 📌 1️⃣ Upload a Folder Structure (POST)
-router.post("/upload", async (req, res) => {
-  try {
-    const { rootFolder } = req.body;
-    if (!rootFolder) {
-      return res.status(400).json({ error: "No folder data provided" });
-    }
 
-    const savedStructure = await saveFolderStructure(rootFolder);
-    res.status(201).json(savedStructure);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+  return (
+    <>
+      <Head />
+      <div className="data-sharing-container">
+        <h2>Data Sharing</h2>
+        <p>Share your individual files and folders securely.</p>
 
-// 📌 2️⃣ Get All Root Folders (GET)
-router.get("/folders", async (req, res) => {
-  try {
-    const folders = await Folder.find({ parent: null }).populate("children");
-    res.json(folders);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+        <div className="upload-section">
+          <input type="file" multiple webkitdirectory="" directory="" onChange={handleFileChange} />
+        </div>
 
-// 📌 3️⃣ Get a Folder's Contents (GET)
-router.get("/folders/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const folder = await Folder.findById(id).populate("children");
-    if (!folder) return res.status(404).json({ error: "Folder not found" });
+        <div >
+          {Object.keys(folderStructure).length > 0 && (
+            <div >
+              <h3>Selected Folders:</h3>
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
+                  <div className="ul-style" style={{ width: "600px" }}>
+                     {renderFolderTree(folderStructure)}
+                  </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+};
 
-    res.json(folder);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 📌 4️⃣ Delete a Folder or File (DELETE)
-router.delete("/folders/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const folder = await Folder.findById(id);
-    if (!folder) return res.status(404).json({ error: "Folder not found" });
-
-    // Delete all nested folders & files
-    const deleteRecursive = async (folderId) => {
-      const children = await Folder.find({ parent: folderId });
-      for (const child of children) {
-        await deleteRecursive(child._id);
-      }
-      await Folder.findByIdAndDelete(folderId);
-    };
-
-    await deleteRecursive(id);
-    res.json({ message: "Folder deleted successfully" });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-module.exports = router;
+export default DataSharing;
