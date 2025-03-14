@@ -29,7 +29,7 @@ app.use("/api", folderRoutes);
 
 // Default Route
 app.get("/", (req, res) => {
-  res.status(200).send("Welcome to CommitNexus API 🚀");
+  res.status(200).send("love you Nashmitha 💕💕💕💕💕💕💕💕💕💕💕💕💕💕💕💕");
 });
 
 // Start the server
