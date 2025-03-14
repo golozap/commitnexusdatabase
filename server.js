@@ -17,7 +17,7 @@ app.use(cors());
 app.use(express.json({ limit: "10mb" })); // Adjust the limit as needed
 
 // MongoDB Connection
-const mongoURI = process.env.MONGO_URI || "mongodb://commitdatabase-eight.vercel.app";
+const mongoURI = process.env.MONGO_URI || "mongodb://commitdatabase-commitnexus-commitnexus-projects.vercel.app";
 mongoose
   .connect(mongoURI)
   .then(() => console.log("✅ Connected successfully to MongoDB"))
