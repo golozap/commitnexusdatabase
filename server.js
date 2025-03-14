@@ -8,7 +8,7 @@ const path = require("path");
 
 // Initialize Express
 const app = express();
-const port = 3000; // Port for the server
+const port = process.env.PORT || 3000;
 
 // Enable CORS
 app.use(cors());
@@ -17,7 +17,7 @@ app.use(cors());
 app.use(express.json({ limit: "10mb" })); // Adjust the limit as needed
 
 // MongoDB Connection
-const mongoURI = process.env.MONGO_URI || "mongodb://commitdatabase.vercel.app/commitnexus";
+const mongoURI = process.env.MONGO_URI || "mongodb://commitdatabase-eight.vercel.app";
 mongoose
   .connect(mongoURI)
   .then(() => console.log("✅ Connected successfully to MongoDB"))
@@ -34,5 +34,5 @@ app.get("/", (req, res) => {
 
 // Start the server
 app.listen(port, () => {
-  console.log(`🚀 Server running at https://commitdatabase.vercel.app/${port}/`);
+  console.log(`🚀 Server running at database-on2sfamm1-commitnexus-projects.vercel.app`);
 });
