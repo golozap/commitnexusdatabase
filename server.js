@@ -17,7 +17,7 @@ app.use(cors());
 app.use(express.json({ limit: "10mb" })); // Adjust the limit as needed
 
 // MongoDB Connection
-const mongoURI = process.env.MONGO_URI || "mongodb://localhost:27017/commitnexus";
+const mongoURI = process.env.MONGO_URI || "mongodb://commitdatabase.vercel.app/commitnexus";
 mongoose
   .connect(mongoURI)
   .then(() => console.log("✅ Connected successfully to MongoDB"))
@@ -34,5 +34,5 @@ app.get("/", (req, res) => {
 
 // Start the server
 app.listen(port, () => {
-  console.log(`🚀 Server running at http://localhost:${port}/`);
+  console.log(`🚀 Server running at https://commitdatabase.vercel.app/${port}/`);
 });

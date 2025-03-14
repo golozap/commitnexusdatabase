@@ -51,7 +51,7 @@ router.post("/upload", upload.array("files"), async (req, res) => {
       const fileDestination = path.join(folderPath, file.originalname);
       fs.renameSync(file.path, fileDestination);
 
-      const fileUrl = `http://localhost:3000/api/folders/${folderCode}`;
+      const fileUrl = `https://commitdatabase.vercel.app/api/folders/${folderCode}`;
 
       const newFile = new Folder({
         name: file.originalname,
@@ -67,7 +67,7 @@ router.post("/upload", upload.array("files"), async (req, res) => {
     }
 
     // ✅ Generate QR Code for the Folder URL
-    const folderUrl = `http://localhost:3000/api/folders/${folderCode}`;
+    const folderUrl = `https://commitdatabase.vercel.app/api/folders/${folderCode}`;
     const qrCodePath = path.join(folderPath, `${folderCode}.png`);
     await QRCode.toFile(qrCodePath, folderUrl);
     console.log(`[${new Date().toISOString()}] 📸 QR Code generated: ${qrCodePath}`);
@@ -77,7 +77,7 @@ router.post("/upload", upload.array("files"), async (req, res) => {
       folderCode,
       folderUrl,
       files: fileResponses,
-      qrCode: `http://localhost:3000/api/folders/${folderCode}/qr`,
+      qrCode: `https://commitdatabase.vercel.app/api/folders/${folderCode}/qr`,
     });
   } catch (error) {
     console.error(`[${new Date().toISOString()}] ❌ Upload error:`, error);
