@@ -18,7 +18,8 @@ const storage = multer.diskStorage({
     cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
-    cb(null, file.originalname);
+    const uniqueFilename = `${Date.now()}-${file.originalname}`;
+    cb(null, uniqueFilename);
   },
 });
 
@@ -48,13 +49,13 @@ router.post("/upload", upload.array("files"), async (req, res) => {
     for (let file of req.files) {
       console.log(`[${new Date().toISOString()}] 🔹 Processing file: ${file.originalname}`);
 
-      const fileDestination = path.join(folderPath, file.originalname);
+      const fileDestination = path.join(folderPath, file.filename);
       fs.renameSync(file.path, fileDestination);
 
-      const fileUrl = `https://commitdatabase.vercel.app/api/folders/${folderCode}`;
+      const fileUrl = `${req.protocol}://${req.get("host")}/api/folders/${folderCode}`;
 
       const newFile = new Folder({
-        name: file.originalname,
+        name: file.filename,
         type: "file",
         path: fileDestination,
         size: file.size,
@@ -63,11 +64,11 @@ router.post("/upload", upload.array("files"), async (req, res) => {
       });
 
       await newFile.save();
-      fileResponses.push({ name: file.originalname, url: fileUrl });
+      fileResponses.push({ name: file.filename, url: fileUrl });
     }
 
     // ✅ Generate QR Code for the Folder URL
-    const folderUrl = `https://commitdatabase.vercel.app/api/folders/${folderCode}`;
+    const folderUrl = `${req.protocol}://${req.get("host")}/api/folders/retrive/${folderCode}`;
     const qrCodePath = path.join(folderPath, `${folderCode}.png`);
     await QRCode.toFile(qrCodePath, folderUrl);
     console.log(`[${new Date().toISOString()}] 📸 QR Code generated: ${qrCodePath}`);
@@ -77,15 +78,13 @@ router.post("/upload", upload.array("files"), async (req, res) => {
       folderCode,
       folderUrl,
       files: fileResponses,
-      qrCode: `https://commitdatabase.vercel.app/api/folders/${folderCode}/qr`,
+      qrCode: `${req.protocol}://${req.get("host")}/api/folders/${folderCode}/qr`,
     });
   } catch (error) {
     console.error(`[${new Date().toISOString()}] ❌ Upload error:`, error);
     res.status(500).json({ error: error.message });
   }
 });
-
-
 
 // 📌 Get QR Code for a Folder (GET)
 router.get("/folders/:code/qr", async (req, res) => {
@@ -105,8 +104,6 @@ router.get("/folders/:code/qr", async (req, res) => {
     res.status(500).send("Server error.");
   }
 });
-
-
 
 // 📌 Get Folder Contents by Unique Code (GET)
 router.get("/folders/:code", async (req, res) => {
@@ -161,27 +158,68 @@ router.get("/folders/:code", async (req, res) => {
 });
 
 
+// 📌 Get Folder Contents by Unique Code (GET)
+router.get("/folders/retrive/:code", async (req, res) => {
+  console.log(`[${new Date().toISOString()}] 🔍 Fetching folder: ${req.params.code}`);
+
+  try {
+    const folderPath = path.join(__dirname, "../uploads", req.params.code);
+
+    // ❌ Check if folder exists & it's a directory
+    if (!fs.existsSync(folderPath) || !fs.lstatSync(folderPath).isDirectory()) {
+      console.log(`[${new Date().toISOString()}] ❌ Invalid folder: ${req.params.code} is not a directory.`);
+      return res.status(404).json({ error: "Folder not found or is not a directory." });
+    }
+
+    // ✅ Read files from the folder
+    const files = fs.readdirSync(folderPath);
+
+    // ❌ If folder exists but has no files
+    if (files.length === 0) {
+      return res.status(404).json({ error: "No files found in this folder." });
+    }
+
+    // ✅ Generate file URLs
+    const fileLinks = files.map(file => ({
+      name: file,
+      url: `${req.protocol}://${req.get("host")}/api/download/${req.params.code}/${encodeURIComponent(file)}`
+    }));
+
+    res.json({ folderCode: req.params.code, files: fileLinks });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] ❌ Folder retrieval error:`, error);
+    res.status(500).json({ error: "Server error." });
+  }
+});
+
+
+
+
+
 // 📌 3️⃣ Download Specific File from Folder (GET)
 router.get("/download/:code/:filename", async (req, res) => {
   console.log(`[${new Date().toISOString()}] 📥 Download request: ${req.params.filename}`);
 
   try {
     const folderPath = path.join(__dirname, "../uploads", req.params.code);
-    const filePath = path.join(folderPath, req.params.filename);
+    const safePath = path.resolve(folderPath, req.params.filename);
 
-    // ❌ Check if the file exists
-    if (!fs.existsSync(filePath)) {
+    // ❌ Prevent path traversal attacks
+    if (!safePath.startsWith(path.resolve(__dirname, "../uploads"))) {
+      return res.status(403).send("Access denied.");
+    }
+
+    if (!fs.existsSync(safePath)) {
       console.log(`[${new Date().toISOString()}] ❌ File not found: ${req.params.filename}`);
       return res.status(404).send("File not found.");
     }
 
     console.log(`[${new Date().toISOString()}] ✅ Serving file: ${req.params.filename}`);
-    res.download(filePath);
+    res.download(safePath);
   } catch (error) {
     console.error(`[${new Date().toISOString()}] ❌ File download error:`, error);
     res.status(500).send("Server error.");
   }
 });
-
 
 module.exports = router;
