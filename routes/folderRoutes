@@ -69,11 +69,10 @@ router.post("/upload", upload.array("files"), async (req, res) => {
 
     // ✅ Generate QR Code for the Folder URL
     const folderUrl = `${req.protocol}://${req.get("host")}/api/folders/${folderCode}`;
-    const folderUrl1 = `${req.protocol}://${req.get("host")}/api/folders/retrive/${folderCode}`;
 
 
     const qrCodePath = path.join(folderPath, `${folderCode}.png`);
-    await QRCode.toFile(qrCodePath, folderUrl1);
+    await QRCode.toFile(qrCodePath, folderUrl);
     console.log(`[${new Date().toISOString()}] 📸 QR Code generated: ${qrCodePath}`);
 
     res.status(201).json({
