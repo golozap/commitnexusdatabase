@@ -35,6 +35,7 @@ router.post("/upload", upload.array("files"), async (req, res) => {
       return res.status(400).json({ error: "No files uploaded" });
     }
 
+    // ✅ Generate a Unique Folder Code
     const folderCode = crypto.randomInt(1000, 9999).toString();
     console.log(`[${new Date().toISOString()}] 🔢 Folder code: ${folderCode}`);
 
@@ -66,7 +67,10 @@ router.post("/upload", upload.array("files"), async (req, res) => {
       fileResponses.push({ name: file.filename, url: fileUrl });
     }
 
+    // ✅ Generate QR Code for the Folder URL
     const folderUrl = `${req.protocol}://${req.get("host")}/api/folders/${folderCode}`;
+
+
     const qrCodePath = path.join(folderPath, `${folderCode}.png`);
     await QRCode.toFile(qrCodePath, folderUrl);
     console.log(`[${new Date().toISOString()}] 📸 QR Code generated: ${qrCodePath}`);
@@ -86,107 +90,138 @@ router.post("/upload", upload.array("files"), async (req, res) => {
 
 // 📌 Get QR Code for a Folder (GET)
 router.get("/folders/:code/qr", async (req, res) => {
-  const qrCodePath = path.join(__dirname, "../uploads", req.params.code, `${req.params.code}.png`);
-  if (!fs.existsSync(qrCodePath)) {
-    return res.status(404).send("QR Code not found.");
-  }
-  res.sendFile(qrCodePath);
-});
+  console.log(`[${new Date().toISOString()}] 🔍 Fetching QR Code for: ${req.params.code}`);
 
-// 📌 Recursive folder structure
-function buildFolderTree(currentPath, baseUrl) {
-  const stats = fs.statSync(currentPath);
-  if (!stats.isDirectory()) {
-    return null;
-  }
+  try {
+    const qrCodePath = path.join(__dirname, "../uploads", req.params.code, `${req.params.code}.png`);
 
-  const name = path.basename(currentPath);
-  const children = fs.readdirSync(currentPath).map((item) => {
-    const itemPath = path.join(currentPath, item);
-    const itemStats = fs.statSync(itemPath);
-
-    if (itemStats.isDirectory()) {
-      return buildFolderTree(itemPath, baseUrl);
-    } else {
-      return {
-        name: item,
-        type: "file",
-        size: itemStats.size,
-        url: `${baseUrl}/api/download/${path.basename(currentPath)}/${encodeURIComponent(item)}`,
-      };
+    if (!fs.existsSync(qrCodePath)) {
+      console.log(`[${new Date().toISOString()}] ❌ QR Code not found for: ${req.params.code}`);
+      return res.status(404).send("QR Code not found.");
     }
-  });
 
-  return {
-    name,
-    type: "folder",
-    children: children.filter(Boolean),
-  };
-}
-
-// 📌 Get Recursive Folder Structure (GUI Tree JSON API)
-router.get("/folders/tree/:code", async (req, res) => {
-  const folderPath = path.join(__dirname, "../uploads", req.params.code);
-  if (!fs.existsSync(folderPath) || !fs.lstatSync(folderPath).isDirectory()) {
-    return res.status(404).json({ error: "Folder not found or is not a directory." });
+    res.sendFile(qrCodePath);
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] ❌ QR Code retrieval error:`, error);
+    res.status(500).send("Server error.");
   }
-
-  const folderTree = buildFolderTree(folderPath, `${req.protocol}://${req.get("host")}`);
-  res.json({ folderCode: req.params.code, ...folderTree });
 });
 
-// 📌 Get Folder Contents by Unique Code (Simple HTML)
+// 📌 Get Folder Contents by Unique Code (GET)
 router.get("/folders/:code", async (req, res) => {
-  const folderPath = path.join(__dirname, "../uploads", req.params.code);
-  if (!fs.existsSync(folderPath) || !fs.lstatSync(folderPath).isDirectory()) {
-    return res.status(404).send("Folder not found or is not a directory.");
+  console.log(`[${new Date().toISOString()}] 🔍 Fetching folder: ${req.params.code}`);
+
+  try {
+    const folderPath = path.join(__dirname, "../uploads", req.params.code);
+
+    // ❌ Check if folder exists & it's a directory
+    if (!fs.existsSync(folderPath) || !fs.lstatSync(folderPath).isDirectory()) {
+      console.log(`[${new Date().toISOString()}] ❌ Invalid folder: ${req.params.code} is not a directory.`);
+      return res.status(404).send("Folder not found or is not a directory.");
+    }
+
+    // ✅ Read files from the folder
+    const files = fs.readdirSync(folderPath);
+
+    // ❌ If folder exists but has no files
+    if (files.length === 0) {
+      return res.status(404).send("No files found in this folder.");
+    }
+
+    // ✅ Generate file URLs
+    const fileLinks = files.map(file => ({
+      name: file,
+      url: `${req.protocol}://${req.get("host")}/api/download/${req.params.code}/${encodeURIComponent(file)}`
+    }));
+
+    res.send(`
+      <html>
+        <head>
+          <title>Files in Folder ${req.params.code}</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+            .file-list { text-align: left; max-width: 500px; margin: auto; }
+            a { display: block; margin: 10px 0; color: #007bff; text-decoration: none; font-size: 16px; }
+          </style>
+        </head>
+        <body>
+          <h2>📂 Folder ${req.params.code}</h2>
+          <p>Click a file to download:</p>
+          <div class="file-list">
+            ${fileLinks.map(file => `<a href="${file.url}" download>${file.name}</a>`).join("")}
+          </div>
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] ❌ Folder retrieval error:`, error);
+    res.status(500).send("Server error.");
   }
-
-  const files = fs.readdirSync(folderPath);
-  if (files.length === 0) {
-    return res.status(404).send("No files found in this folder.");
-  }
-
-  const fileLinks = files.map((file) => ({
-    name: file,
-    url: `${req.protocol}://${req.get("host")}/api/download/${req.params.code}/${encodeURIComponent(file)}`,
-  }));
-
-  res.send(`
-    <html>
-      <head>
-        <title>Files in Folder ${req.params.code}</title>
-        <style>
-          body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
-          .file-list { text-align: left; max-width: 500px; margin: auto; }
-          a { display: block; margin: 10px 0; color: #007bff; text-decoration: none; font-size: 16px; }
-        </style>
-      </head>
-      <body>
-        <h2>📂 Folder ${req.params.code}</h2>
-        <p>Click a file to download:</p>
-        <div class="file-list">
-          ${fileLinks.map((file) => `<a href="${file.url}" download>${file.name}</a>`).join("")}
-        </div>
-      </body>
-    </html>
-  `);
 });
 
-// 📌 Download Specific File
+
+// 📌 Get Folder Contents by Unique Code (GET)
+router.get("/folders/retrive/:code", async (req, res) => {
+  console.log(`[${new Date().toISOString()}] 🔍 Fetching folder: ${req.params.code}`);
+
+  try {
+    const folderPath = path.join(__dirname, "../uploads", req.params.code);
+
+    // ❌ Check if folder exists & it's a directory
+    if (!fs.existsSync(folderPath) || !fs.lstatSync(folderPath).isDirectory()) {
+      console.log(`[${new Date().toISOString()}] ❌ Invalid folder: ${req.params.code} is not a directory.`);
+      return res.status(404).json({ error: "Folder not found or is not a directory." });
+    }
+
+    // ✅ Read files from the folder
+    const files = fs.readdirSync(folderPath);
+
+    // ❌ If folder exists but has no files
+    if (files.length === 0) {
+      return res.status(404).json({ error: "No files found in this folder." });
+    }
+
+    // ✅ Generate file URLs
+    const fileLinks = files.map(file => ({
+      name: file,
+      url: `${req.protocol}://${req.get("host")}/api/download/${req.params.code}/${encodeURIComponent(file)}`
+    }));
+
+    res.json({ folderCode: req.params.code, files: fileLinks });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] ❌ Folder retrieval error:`, error);
+    res.status(500).json({ error: "Server error." });
+  }
+});
+
+
+
+
+
+// 📌 3️⃣ Download Specific File from Folder (GET)
 router.get("/download/:code/:filename", async (req, res) => {
-  const folderPath = path.join(__dirname, "../uploads", req.params.code);
-  const safePath = path.resolve(folderPath, req.params.filename);
+  console.log(`[${new Date().toISOString()}] 📥 Download request: ${req.params.filename}`);
 
-  if (!safePath.startsWith(path.resolve(__dirname, "../uploads"))) {
-    return res.status(403).send("Access denied.");
+  try {
+    const folderPath = path.join(__dirname, "../uploads", req.params.code);
+    const safePath = path.resolve(folderPath, req.params.filename);
+
+    // ❌ Prevent path traversal attacks
+    if (!safePath.startsWith(path.resolve(__dirname, "../uploads"))) {
+      return res.status(403).send("Access denied.");
+    }
+
+    if (!fs.existsSync(safePath)) {
+      console.log(`[${new Date().toISOString()}] ❌ File not found: ${req.params.filename}`);
+      return res.status(404).send("File not found.");
+    }
+
+    console.log(`[${new Date().toISOString()}] ✅ Serving file: ${req.params.filename}`);
+    res.download(safePath);
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] ❌ File download error:`, error);
+    res.status(500).send("Server error.");
   }
-
-  if (!fs.existsSync(safePath)) {
-    return res.status(404).send("File not found.");
-  }
-
-  res.download(safePath);
 });
 
 module.exports = router;
