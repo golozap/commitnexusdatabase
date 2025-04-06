@@ -26,67 +26,86 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // 📌 1️⃣ Upload Folder & Files (POST)
-router.post("/upload", upload.array("files"), async (req, res) => {
-  console.log(`[${new Date().toISOString()}] 📤 Upload request received.`);
 
-  try {
-    if (!req.files || req.files.length === 0) {
-      console.log(`[${new Date().toISOString()}] ❌ No files uploaded.`);
-      return res.status(400).json({ error: "No files uploaded" });
-    }
 
-    // ✅ Generate a Unique Folder Code
-    const folderCode = crypto.randomInt(1000, 9999).toString();
-    console.log(`[${new Date().toISOString()}] 🔢 Folder code: ${folderCode}`);
+router.post(
+  "/upload",
+  upload.fields([
+    { name: "files", maxCount: 100 },
+    { name: "filePaths", maxCount: 1 },
+  ]),
+  async (req, res) => {
+    console.log(`[${new Date().toISOString()}] 📤 Upload request received.`);
 
-    const folderPath = path.join(__dirname, "../uploads", folderCode);
-    if (!fs.existsSync(folderPath)) {
-      fs.mkdirSync(folderPath, { recursive: true });
-    }
+    try {
+      const uploadedFiles = req.files["files"];
+      const filePathsRaw = req.body.filePaths;
 
-    let fileResponses = [];
+      if (!uploadedFiles || uploadedFiles.length === 0 || !filePathsRaw) {
+        console.log(`[${new Date().toISOString()}] ❌ No files or paths uploaded.`);
+        return res.status(400).json({ error: "No files or paths uploaded" });
+      }
 
-    for (let file of req.files) {
-      console.log(`[${new Date().toISOString()}] 🔹 Processing file: ${file.originalname}`);
+      const filePaths = JSON.parse(filePathsRaw);
+      console.log("📂 Received Paths Array:", filePaths);
 
-      const fileDestination = path.join(folderPath, file.filename);
-      fs.renameSync(file.path, fileDestination);
+      // ✅ Generate a Unique Folder Code
+      const folderCode = crypto.randomInt(1000, 9999).toString();
+      console.log(`[${new Date().toISOString()}] 🔢 Folder code: ${folderCode}`);
 
-      const fileUrl = `${req.protocol}://${req.get("host")}/api/folders/${folderCode}`;
+      const folderPath = path.join(__dirname, "../uploads", folderCode);
+      if (!fs.existsSync(folderPath)) {
+        fs.mkdirSync(folderPath, { recursive: true });
+      }
 
-      const newFile = new Folder({
-        name: file.filename,
-        type: "file",
-        path: fileDestination,
-        size: file.size,
-        code: folderCode,
-        url: fileUrl,
+      let filesToSave = [];
+
+      for (let i = 0; i < uploadedFiles.length; i++) {
+        const file = uploadedFiles[i];
+        const relativeFilePath = filePaths[i]; // e.g., "1/2.1/file.txt"
+        const fullSavePath = path.join(folderPath, relativeFilePath); // uploads/1234/1/2.1/file.txt
+        const fileDir = path.dirname(fullSavePath);
+
+        // ✅ Create subdirectories if not exists
+        fs.mkdirSync(fileDir, { recursive: true });
+
+        // ✅ Move uploaded file to correct path
+        fs.renameSync(file.path, fullSavePath);
+
+        filesToSave.push({
+          filePath: relativeFilePath,
+        });
+
+        console.log(`[${new Date().toISOString()}] ✅ Saved: ${relativeFilePath}`);
+      }
+
+      // ✅ Save folder & files to MongoDB
+      const newFolder = new Folder({
+        folderName: folderCode,
+        files: filesToSave,
       });
 
-      await newFile.save();
-      fileResponses.push({ name: file.filename, url: fileUrl });
+      await newFolder.save();
+
+      // ✅ Generate QR Code for the Folder URL
+      const folderUrl = `${req.protocol}://${req.get("host")}/api/folders/${folderCode}`;
+      const qrCodePath = path.join(folderPath, `${folderCode}.png`);
+      await QRCode.toFile(qrCodePath, folderUrl);
+      console.log(`[${new Date().toISOString()}] 📸 QR Code generated: ${qrCodePath}`);
+
+      res.status(201).json({
+        message: "Folder uploaded successfully",
+        folderCode,
+        folderUrl,
+        files: filesToSave,
+        qrCode: `${req.protocol}://${req.get("host")}/api/folders/${folderCode}/qr`,
+      });
+    } catch (error) {
+      console.error(`[${new Date().toISOString()}] ❌ Upload error:`, error);
+      res.status(500).json({ error: error.message });
     }
-
-    // ✅ Generate QR Code for the Folder URL
-    const folderUrl = `${req.protocol}://${req.get("host")}/api/folders/${folderCode}`;
-
-
-    const qrCodePath = path.join(folderPath, `${folderCode}.png`);
-    await QRCode.toFile(qrCodePath, folderUrl);
-    console.log(`[${new Date().toISOString()}] 📸 QR Code generated: ${qrCodePath}`);
-
-    res.status(201).json({
-      message: "Folder uploaded successfully",
-      folderCode,
-      folderUrl,
-      files: fileResponses,
-      qrCode: `${req.protocol}://${req.get("host")}/api/folders/${folderCode}/qr`,
-    });
-  } catch (error) {
-    console.error(`[${new Date().toISOString()}] ❌ Upload error:`, error);
-    res.status(500).json({ error: error.message });
   }
-});
+);
 
 // 📌 Get QR Code for a Folder (GET)
 router.get("/folders/:code/qr", async (req, res) => {
@@ -160,36 +179,58 @@ router.get("/folders/:code", async (req, res) => {
 });
 
 
-// 📌 Get Folder Contents by Unique Code (GET)
+// 🔁 Recursive file structure reader
+const walkDir = (dirPath, baseUrl, folderCode, relative = "") => {
+  let results = [];
+  const list = fs.readdirSync(dirPath);
+
+  list.forEach(item => {
+    const fullPath = path.join(dirPath, item);
+    const relPath = path.join(relative, item);
+    const stat = fs.statSync(fullPath);
+
+    if (stat.isDirectory()) {
+      // 📁 Subfolder — keep digging
+      results = results.concat(walkDir(fullPath, baseUrl, folderCode, relPath));
+    } else {
+      // 📄 File — store with relative path and download URL
+      results.push({
+        name: item,
+        path: relPath.replace(/\\/g, "/"),
+        url: `${baseUrl}/api/download/${folderCode}/${encodeURIComponent(relPath.replace(/\\/g, "/"))}`,
+      });
+    }
+  });
+
+  return results;
+};
+
+// 📌 Retrieve Folder Contents
 router.get("/folders/retrive/:code", async (req, res) => {
-  console.log(`[${new Date().toISOString()}] 🔍 Fetching folder: ${req.params.code}`);
+  const folderCode = req.params.code;
+  const folderPath = path.join(__dirname, "../uploads", folderCode);
+  const baseUrl = `${req.protocol}://${req.get("host")}`;
+
+  console.log(`[${new Date().toISOString()}] 📂 Retrieving folder ${folderCode}`);
 
   try {
-    const folderPath = path.join(__dirname, "../uploads", req.params.code);
-
-    // ❌ Check if folder exists & it's a directory
     if (!fs.existsSync(folderPath) || !fs.lstatSync(folderPath).isDirectory()) {
-      console.log(`[${new Date().toISOString()}] ❌ Invalid folder: ${req.params.code} is not a directory.`);
-      return res.status(404).json({ error: "Folder not found or is not a directory." });
+      return res.status(404).json({ error: "Folder not found." });
     }
 
-    // ✅ Read files from the folder
-    const files = fs.readdirSync(folderPath);
+    const files = walkDir(folderPath, baseUrl, folderCode);
 
-    // ❌ If folder exists but has no files
     if (files.length === 0) {
       return res.status(404).json({ error: "No files found in this folder." });
     }
 
-    // ✅ Generate file URLs
-    const fileLinks = files.map(file => ({
-      name: file,
-      url: `${req.protocol}://${req.get("host")}/api/download/${req.params.code}/${encodeURIComponent(file)}`
-    }));
-
-    res.json({ folderCode: req.params.code, files: fileLinks });
-  } catch (error) {
-    console.error(`[${new Date().toISOString()}] ❌ Folder retrieval error:`, error);
+    res.json({
+      folderCode,
+      totalFiles: files.length,
+      files,
+    });
+  } catch (err) {
+    console.error(`[${new Date().toISOString()}] ❌ Error retrieving folder:`, err);
     res.status(500).json({ error: "Server error." });
   }
 });
