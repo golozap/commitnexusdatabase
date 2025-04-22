@@ -22,6 +22,9 @@ mongoose
   .then(() => console.log("✅ Connected successfully to MongoDB"))
   .catch((err) => console.error("❌ MongoDB connection error:", err));
 
+const userRoutes = require("./routes/userRoutes");
+app.use("/api", userRoutes);
+
 // Import Routes
 const folderRoutes = require("./routes/folderRoutes");
 app.use("/api", folderRoutes);

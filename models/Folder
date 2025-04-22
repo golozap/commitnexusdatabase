@@ -7,11 +7,18 @@ const FolderSchema = new mongoose.Schema({
   },
   files: [
     {
-      filePath: {
+      filename: {
+        type: String,
+        required: true, // Full relative path (e.g., "hello.txt")
+      },
+      filepath:{
         type: String,
         required: true, // Full relative path (e.g., "1/2/hello.txt")
       },
-      
+      filesize: {
+        type: Number,
+        required: true, // Size of the file in bytes
+      },
     },
   ],
   createdAt: {
