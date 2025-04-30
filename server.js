@@ -31,7 +31,7 @@ app.use("/api", folderRoutes);
 
 // Default Route
 app.get("/", (req, res) => {
-  res.status(200).send("love you Nashmitha 💕💕💕💕💕💕💕💕💕💕💕💕💕💕💕💕");
+  res.status(200).send("love you Nashmitha ");
 });
 
 // Error handling middleware (for unhandled routes or errors)
