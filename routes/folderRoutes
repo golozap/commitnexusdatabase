@@ -247,31 +247,30 @@ function walkDir(folderPath, baseUrl, folderCode) {
 
   return fileArray;
 }
+
 router.get("/folders/retrive/:code", async (req, res) => {
   const folderCode = req.params.code;
   const baseUrl = `${req.protocol}://${req.get("host")}`;
-  const uploadPath = path.join(__dirname, "../uploads", folderCode);
 
   console.log(`[${new Date().toISOString()}] 📂 Retrieving folder ${folderCode}`);
 
   try {
+    // Find the folder document by its folderName (folder code)
     const folder = await Folder.findOne({ folderName: folderCode });
 
     if (!folder) {
       return res.status(404).json({ error: "Folder not found." });
     }
 
-    const filesWithUrl = folder.files.map(file => {
-      const localPath = path.join(uploadPath, file.filepath);  // Full file location on server
-      return {
-        filename: file.filename,
-        filepath: file.filepath,
-        filesize: file.filesize,
-        url: `${baseUrl}/api/download/${folderCode}/${encodeURIComponent(file.filepath)}`,
-        storagePath: localPath  // Include local server path
-      };
-    });
+    // Map each file to include download URL
+    const filesWithUrl = folder.files.map(file => ({
+      filename: file.filename,
+      filepath: file.filepath,
+      filesize: file.filesize,
+      url: `${baseUrl}/api/download/${folderCode}/${encodeURIComponent(file.filepath)}`
+    }));
 
+    // Respond with updated data
     res.json({
       folderCode: folder.folderName,
       totalFiles: folder.files.length,
@@ -282,7 +281,6 @@ router.get("/folders/retrive/:code", async (req, res) => {
     res.status(500).json({ error: "Server error." });
   }
 });
-
 
 
 
