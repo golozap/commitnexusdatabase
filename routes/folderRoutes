@@ -288,30 +288,29 @@ router.get("/folders/retrive/:code", async (req, res) => {
 
 
 
-// 📌 3️⃣ Download Specific File from Folder (GET)
-router.get("/download/:code/:filename", async (req, res) => {
-  console.log(`[${new Date().toISOString()}] 📥 Download request: ${req.params.filename}`);
+// 📌 3️⃣ Download Specific File from Folder (GET) — Supports subfolder paths
+router.get("/download/:code/*", async (req, res) => {
+  const folderCode = req.params.code;
+  const fileRelativePath = req.params[0]; // captures full subpath like "1/2/file.txt"
+  const filePath = path.join(__dirname, "../uploads", folderCode, fileRelativePath);
 
-  try {
-    const folderPath = path.join(__dirname, "../uploads", req.params.code);
-    const safePath = path.resolve(folderPath, req.params.filename);
+  const safeBase = path.resolve(__dirname, "../uploads", folderCode);
+  const safePath = path.resolve(filePath);
 
-    // ❌ Prevent path traversal attacks
-    if (!safePath.startsWith(path.resolve(__dirname, "../uploads"))) {
-      return res.status(403).send("Access denied.");
-    }
-
-    if (!fs.existsSync(safePath)) {
-      console.log(`[${new Date().toISOString()}] ❌ File not found: ${req.params.filename}`);
-      return res.status(404).send("File not found.");
-    }
-
-    console.log(`[${new Date().toISOString()}] ✅ Serving file: ${req.params.filename}`);
-    res.download(safePath);
-  } catch (error) {
-    console.error(`[${new Date().toISOString()}] ❌ File download error:`, error);
-    res.status(500).send("Server error.");
+  // ❌ Prevent path traversal attacks
+  if (!safePath.startsWith(safeBase)) {
+    return res.status(403).send("Access denied.");
   }
+
+  if (!fs.existsSync(safePath)) {
+    console.log(`[${new Date().toISOString()}] ❌ File not found: ${fileRelativePath}`);
+    return res.status(404).send("File not found.");
+  }
+
+  console.log(`[${new Date().toISOString()}] ✅ Serving file: ${fileRelativePath}`);
+  res.download(safePath);
 });
+
+
 
 module.exports = router;
