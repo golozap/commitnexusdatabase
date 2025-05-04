@@ -29,6 +29,9 @@ app.use("/api", userRoutes);
 const folderRoutes = require("./routes/folderRoutes");
 app.use("/api", folderRoutes);
 
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+
 // Default Route
 app.get("/", (req, res) => {
   res.status(200).send("love you Nashmitha ");
