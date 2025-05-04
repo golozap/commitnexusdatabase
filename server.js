@@ -38,7 +38,7 @@ app.use("/api", folderRoutes);
 app.post("/api/all/folders/downloadSelected", async (req, res) => {
   console.log("⬇️ Downloading selected files...");
   const { code, filepaths } = req.body;
-  const basePath = path.join(__dirname, "uploads", code); // Fixed path
+  const basePath = path.join(__dirname, "uploads", code);
 
   if (!fs.existsSync(basePath)) {
     return res.status(404).json({ message: "Folder not found" });
@@ -50,16 +50,26 @@ app.post("/api/all/folders/downloadSelected", async (req, res) => {
   const archive = archiver("zip", { zlib: { level: 9 } });
   archive.pipe(res);
 
-  filepaths.forEach(fp => {
+  for (const fp of filepaths) {
     const fullPath = path.join(basePath, fp);
-    if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
-      archive.file(fullPath, { name: fp }); // keep folder structure in zip
+    try {
+      if (fs.existsSync(fullPath)) {
+        const stats = fs.statSync(fullPath);
+        if (stats.isFile()) {
+          archive.file(fullPath, { name: fp }); // keep relative path
+        } else if (stats.isDirectory()) {
+          archive.directory(fullPath, fp); // include whole directory
+        }
+      } else {
+        console.warn("⚠️ File does not exist:", fullPath);
+      }
+    } catch (err) {
+      console.error("❌ Error accessing file:", fullPath, err);
     }
-  });
+  }
 
   await archive.finalize();
 });
-
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
