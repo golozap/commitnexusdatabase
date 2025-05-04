@@ -315,6 +315,7 @@ router.get("/download/:code/*", async (req, res) => {
 
 
 router.post("/allfolders/downloadSelected", async (req, res) => {
+  console.log("dowmloading all folder");
   const { code, filepaths } = req.body;
   const basePath = path.join(__dirname, "..", "uploads", code);
 
