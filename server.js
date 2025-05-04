@@ -35,10 +35,10 @@ const folderRoutes = require("./routes/folderRoutes");
 app.use("/api", folderRoutes);
 
 
-router.post("/api/all/folders/downloadSelected", async (req, res) => {
-  console.log("dowmloading all folder");
+app.post("/api/all/folders/downloadSelected", async (req, res) => {
+  console.log("⬇️ Downloading selected files...");
   const { code, filepaths } = req.body;
-  const basePath = path.join(__dirname, "..", "uploads", code);
+  const basePath = path.join(__dirname, "uploads", code); // Fixed path
 
   if (!fs.existsSync(basePath)) {
     return res.status(404).json({ message: "Folder not found" });
@@ -59,6 +59,7 @@ router.post("/api/all/folders/downloadSelected", async (req, res) => {
 
   await archive.finalize();
 });
+
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
