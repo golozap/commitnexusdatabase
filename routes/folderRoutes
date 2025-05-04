@@ -5,6 +5,8 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const QRCode = require("qrcode");
+const archiver = require('archiver');
+
 
 const router = express.Router();
 
