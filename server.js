@@ -1,9 +1,11 @@
-// Load environment variables from the .env file
+// Load environment variables from the .env file// Load environment variables from the .env file
 require("dotenv").config();
 
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const path = require("path"); // ✅ Required for serving uploads
+
 
 // Initialize Express
 const app = express();
