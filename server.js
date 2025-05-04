@@ -5,6 +5,9 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const path = require("path"); // ✅ Required for serving uploads
+const archiver = require('archiver');
+const fs = require("fs"); // ✅ Required for file system operations
+
 
 
 // Initialize Express
@@ -30,6 +33,32 @@ app.use("/api", userRoutes);
 // Import Routes
 const folderRoutes = require("./routes/folderRoutes");
 app.use("/api", folderRoutes);
+
+
+router.post("/api/all/folders/downloadSelected", async (req, res) => {
+  console.log("dowmloading all folder");
+  const { code, filepaths } = req.body;
+  const basePath = path.join(__dirname, "..", "uploads", code);
+
+  if (!fs.existsSync(basePath)) {
+    return res.status(404).json({ message: "Folder not found" });
+  }
+
+  res.setHeader("Content-Disposition", `attachment; filename=${code}.zip`);
+  res.setHeader("Content-Type", "application/zip");
+
+  const archive = archiver("zip", { zlib: { level: 9 } });
+  archive.pipe(res);
+
+  filepaths.forEach(fp => {
+    const fullPath = path.join(basePath, fp);
+    if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+      archive.file(fullPath, { name: fp }); // keep folder structure in zip
+    }
+  });
+
+  await archive.finalize();
+});
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
