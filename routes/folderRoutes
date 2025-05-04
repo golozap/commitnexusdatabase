@@ -312,5 +312,29 @@ router.get("/download/:code/*", async (req, res) => {
 });
 
 
+router.post("/folders/downloadSelected", async (req, res) => {
+  const { code, filepaths } = req.body;
+  const basePath = path.join(__dirname, "..", "uploads", code);
+
+  if (!fs.existsSync(basePath)) {
+    return res.status(404).json({ message: "Folder not found" });
+  }
+
+  res.setHeader("Content-Disposition", `attachment; filename=${code}.zip`);
+  res.setHeader("Content-Type", "application/zip");
+
+  const archive = archiver("zip", { zlib: { level: 9 } });
+  archive.pipe(res);
+
+  filepaths.forEach(fp => {
+    const fullPath = path.join(basePath, fp);
+    if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+      archive.file(fullPath, { name: fp }); // keep folder structure in zip
+    }
+  });
+
+  await archive.finalize();
+});
+
 
 module.exports = router;
