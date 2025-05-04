@@ -15,7 +15,10 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Enable CORS
-app.use(cors());
+app.use(cors({
+  origin: "http://localhost:3000", // allow React dev environment
+  credentials: true, // if you're using cookies or sessions
+}));
 
 // Middleware to parse JSON with increased limit
 app.use(express.json({ limit: "10mb" })); // Adjust the limit as needed
